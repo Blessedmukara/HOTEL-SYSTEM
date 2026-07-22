@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Order Board — Hotel POS</title>
+<style>
+  :root {
+    --ink: #2b2420;
+    --ink-soft: #6b5f54;
+    --ink-faint: #a89b8d;
+    --paper: #faf6f0;
+    --card: #ffffff;
+    --line: #e8ddd0;
+    --line-strong: #d9cabb;
+    --rust: #b5502e;
+    --rust-dark: #8a3a1f;
+    --rust-tint: #fbe8de;
+    --olive: #5c6b3d;
+    --olive-tint: #eef1e3;
+    --olive-dark: #3f4a2a;
+    --gold: #b9852f;
+    --gold-tint: #faf1de;
+    --gold-dark: #7d5817;
+    --radius: 10px;
+    --radius-lg: 16px;
+    font-size: 16px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    width: 100%;
+    overflow-x: hidden;
+  }
+  #app { max-width: 480px; margin: 0 auto; min-height: 100vh; padding-bottom: 2rem; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+    padding: 0.85rem 1rem;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .brand { display: flex; align-items: center; gap: 0.6rem; }
+  .brand-mark {
+    width: 34px; height: 34px; border-radius: 8px;
+    background: var(--rust);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .brand-mark svg { width: 18px; height: 18px; }
+  .brand-text { line-height: 1.15; }
+  .brand-title { font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+  .brand-sub { font-size: 11.5px; color: var(--ink-soft); }
+  .topbar-right { display: flex; align-items: center; gap: 0.5rem; }
+  .date-pill {
+    font-size: 12px; color: var(--ink-soft);
+    background: var(--card); border: 1px solid var(--line);
+    padding: 0.3rem 0.6rem; border-radius: 999px;
+    white-space: nowrap;
+  }
+  .icon-btn {
+    width: 34px; height: 34px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--card);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--ink-soft);
+  }
+  .icon-btn:active { transform: scale(0.94); }
+  .icon-btn svg { width: 17px; height: 17px; }
+
+  .screen { padding: 1rem; }
+  .screen.tight { padding: 1rem 1rem 0.25rem; }
+
+  h1.page-title { font-size: 20px; font-weight: 700; margin: 0.2rem 0 0.15rem; }
+  p.page-sub { font-size: 13.5px; color: var(--ink-soft); margin: 0 0 1.1rem; line-height: 1.5; }
+
+  /* Role picker */
+  .role-wrap { padding: 2.4rem 1.4rem 1.4rem; text-align: center; }
+  .role-mark {
+    width: 64px; height: 64px; border-radius: 16px;
+    background: var(--rust); margin: 0 auto 1.1rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .role-mark svg { width: 32px; height: 32px; }
+  .role-wrap h1 { font-size: 23px; font-weight: 700; margin: 0 0 0.35rem; }
+  .role-wrap p { font-size: 14px; color: var(--ink-soft); margin: 0 0 2rem; line-height: 1.55; }
+  .role-card {
+    display: flex; align-items: center; gap: 0.9rem;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius-lg); padding: 1rem 1.1rem;
+    margin-bottom: 0.75rem; text-align: left; cursor: pointer;
+  }
+  .role-card:active { transform: scale(0.985); background: var(--gold-tint); }
+  .role-card-icon {
+    width: 46px; height: 46px; border-radius: 12px;
+    background: var(--olive-tint); color: var(--olive-dark);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .role-card-icon svg { width: 24px; height: 24px; }
+  .role-card.manager .role-card-icon { background: var(--rust-tint); color: var(--rust-dark); }
+  .role-card-title { font-size: 15.5px; font-weight: 700; margin: 0 0 0.15rem; }
+  .role-card-sub { font-size: 12.5px; color: var(--ink-soft); line-height: 1.4; }
+  .role-card-arrow { margin-left: auto; color: var(--ink-faint); flex-shrink: 0; }
+
+  .name-input-wrap { margin-top: 0.5rem; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; font-size: 15px; font-family: inherit; color: var(--ink);
+    background: var(--card); border: 1.5px solid var(--line-strong);
+    border-radius: var(--radius); padding: 0.75rem 0.85rem;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--rust); }
+  label.field-label { display: block; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); margin: 0 0 0.35rem; text-transform: uppercase; letter-spacing: 0.4px; }
+  .field { margin-bottom: 0.9rem; }
+
+  button.btn {
+    font-family: inherit; font-size: 15px; font-weight: 700;
+    border-radius: var(--radius); border: none; cursor: pointer;
+    padding: 0.85rem 1rem; width: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 0.45rem;
+  }
+  button.btn:active { transform: scale(0.98); }
+  button.btn.primary { background: var(--rust); color: #fff; }
+  button.btn.secondary { background: var(--olive); color: #fff; }
+  button.btn.ghost { background: var(--card); color: var(--ink); border: 1.5px solid var(--line-strong); }
+  button.btn.ghost.danger { color: var(--rust-dark); border-color: var(--rust-tint); }
+  button.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.btn svg { width: 17px; height: 17px; }
+
+  /* Tabs (manager) */
+  .tabs { display: flex; gap: 0.4rem; padding: 0 1rem 0.9rem; overflow-x: auto; }
+  .tab {
+    font-size: 13px; font-weight: 700; white-space: nowrap;
+    padding: 0.5rem 0.9rem; border-radius: 999px;
+    border: 1.5px solid var(--line-strong); background: var(--card); color: var(--ink-soft);
+    cursor: pointer; flex-shrink: 0;
+  }
+  .tab.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  /* Category groups */
+  .cat-group { margin-bottom: 1.4rem; }
+  .cat-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; }
+  .cat-head h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--ink-soft); margin: 0; }
+  .cat-head .cat-tag {
+    font-size: 10.5px; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px;
+  }
+  .cat-tag.today { background: var(--gold-tint); color: var(--gold-dark); }
+  .cat-tag.standing { background: var(--olive-tint); color: var(--olive-dark); }
+  .cat-rule { flex: 1; height: 1px; background: var(--line); }
+
+  /* Menu item tile (waiter ordering grid) */
+  .item-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .item-tile {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius-lg); padding: 0.85rem 0.85rem 0.75rem;
+    cursor: pointer; position: relative; min-height: 92px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .item-tile:active { background: var(--gold-tint); }
+  .item-tile.out { opacity: 0.4; pointer-events: none; }
+  .item-tile.low { border-color: var(--gold); }
+  .item-name { font-size: 14.5px; font-weight: 700; line-height: 1.3; margin: 0 0 0.3rem; }
+  .item-meta { display: flex; align-items: center; justify-content: space-between; }
+  .item-price { font-size: 13.5px; color: var(--ink-soft); font-weight: 600; }
+  .item-stock { font-size: 11px; color: var(--gold-dark); font-weight: 700; }
+  .item-tile.out .item-stock { color: var(--rust-dark); }
+  .qty-badge {
+    position: absolute; top: -8px; right: -8px;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--rust); color: #fff; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--paper);
+  }
+
+  /* Cart / ticket bar */
+  .ticket-bar {
+    position: sticky; bottom: 0; z-index: 15;
+    background: var(--ink); color: var(--paper);
+    padding: 0.85rem 1rem; border-radius: 16px 16px 0 0;
+    margin: 0.5rem -1rem 0;
+    box-shadow: 0 -6px 18px rgba(0,0,0,0.12);
+  }
+  .ticket-bar-row { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; }
+  .ticket-info { font-size: 12.5px; opacity: 0.75; }
+  .ticket-total { font-size: 17px; font-weight: 700; }
+  .ticket-bar button.btn { width: auto; padding: 0.7rem 1.2rem; }
+
+  /* Cart sheet */
+  .sheet-overlay {
+    position: fixed; inset: 0; background: rgba(43,36,32,0.5);
+    z-index: 50; display: flex; align-items: flex-end; justify-content: center;
+  }
+  .sheet {
+    background: var(--paper); width: 100%; max-width: 480px;
+    border-radius: 20px 20px 0 0; max-height: 88vh; overflow-y: auto;
+    padding: 1.1rem 1rem 1.4rem;
+  }
+  .sheet-handle { width: 40px; height: 4px; background: var(--line-strong); border-radius: 999px; margin: 0 auto 1rem; }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.9rem; }
+  .sheet-head h2 { font-size: 17px; font-weight: 700; margin: 0; }
+
+  .cart-line {
+    display: flex; align-items: center; gap: 0.7rem;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 0.65rem 0.75rem; margin-bottom: 0.5rem;
+  }
+  .cart-line-name { font-size: 14px; font-weight: 700; flex: 1; }
+  .cart-line-price { font-size: 12.5px; color: var(--ink-soft); }
+  .stepper { display: flex; align-items: center; gap: 0.5rem; }
+  .stepper button {
+    width: 28px; height: 28px; border-radius: 8px; border: 1.5px solid var(--line-strong);
+    background: var(--paper); font-size: 16px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; color: var(--ink);
+  }
+  .stepper button:active { transform: scale(0.92); }
+  .stepper span { min-width: 20px; text-align: center; font-weight: 700; font-size: 14px; }
+
+  .divider { height: 1px; background: var(--line); margin: 0.9rem 0; }
+  .total-row { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 700; margin-bottom: 1rem; }
+
+  /* Toast */
+  .toast {
+    position: fixed; top: 1rem; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: var(--paper); font-size: 13.5px; font-weight: 600;
+    padding: 0.6rem 1.1rem; border-radius: 999px; z-index: 100;
+    display: flex; align-items: center; gap: 0.4rem;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+  }
+  .toast svg { width: 15px; height: 15px; color: var(--olive); flex-shrink: 0; }
+
+  /* Recent sales (waiter) */
+  .sale-row {
+    display: flex; align-items: center; gap: 0.7rem;
+    padding: 0.65rem 0; border-bottom: 1px solid var(--line);
+  }
+  .sale-row:last-child { border-bottom: none; }
+  .sale-icon {
+    width: 36px; height: 36px; border-radius: 9px; background: var(--olive-tint); color: var(--olive-dark);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px; font-weight: 700;
+  }
+  .sale-body { flex: 1; min-width: 0; }
+  .sale-name { font-size: 13.5px; font-weight: 700; }
+  .sale-sub { font-size: 11.5px; color: var(--ink-soft); }
+  .sale-amt { font-size: 13.5px; font-weight: 700; color: var(--olive-dark); white-space: nowrap; }
+
+  .empty-state { text-align: center; padding: 2.2rem 1rem; color: var(--ink-soft); }
+  .empty-state svg { width: 40px; height: 40px; color: var(--ink-faint); margin-bottom: 0.7rem; }
+  .empty-state p { font-size: 13.5px; line-height: 1.5; margin: 0; }
+
+  /* Manager: stat cards */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1.2rem; }
+  .stat-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 0.9rem 1rem; }
+  .stat-label { font-size: 11.5px; color: var(--ink-soft); font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin: 0 0 0.3rem; }
+  .stat-value { font-size: 21px; font-weight: 700; }
+  .stat-value.rust { color: var(--rust-dark); }
+  .stat-value.olive { color: var(--olive-dark); }
+
+  .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.7rem; }
+  .section-head h2 { font-size: 15.5px; font-weight: 700; margin: 0; }
+  .section-head .link-btn { font-size: 12.5px; font-weight: 700; color: var(--rust-dark); background: none; border: none; cursor: pointer; }
+
+  .rank-row {
+    display: flex; align-items: center; gap: 0.7rem;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 0.7rem 0.8rem; margin-bottom: 0.5rem;
+  }
+  .rank-num { width: 24px; font-size: 13px; font-weight: 700; color: var(--ink-faint); flex-shrink: 0; }
+  .rank-bar-wrap { flex: 1; min-width: 0; }
+  .rank-name-row { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; margin-bottom: 0.3rem; }
+  .rank-bar-bg { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+  .rank-bar-fill { height: 100%; background: var(--rust); border-radius: 999px; }
+  .rank-count { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+
+  .stock-row {
+    display: flex; align-items: center; gap: 0.7rem;
+    padding: 0.65rem 0; border-bottom: 1px solid var(--line);
+  }
+  .stock-row:last-child { border-bottom: none; }
+  .stock-name { font-size: 13.5px; font-weight: 700; flex: 1; }
+  .stock-nums { font-size: 12px; color: var(--ink-soft); text-align: right; white-space: nowrap; }
+  .stock-remaining { font-weight: 700; }
+  .stock-remaining.low { color: var(--gold-dark); }
+  .stock-remaining.out { color: var(--rust-dark); }
+
+  /* Manager: menu setup */
+  .setup-item-row {
+    display: flex; align-items: center; gap: 0.6rem;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 0.65rem 0.75rem; margin-bottom: 0.5rem;
+  }
+  .setup-item-name { font-size: 13.5px; font-weight: 700; flex: 1; }
+  .setup-item-stock-tag { font-size: 11.5px; color: var(--ink-soft); background: var(--paper); border: 1px solid var(--line); padding: 0.2rem 0.5rem; border-radius: 999px; }
+  .setup-item-remove { color: var(--rust-dark); background: none; border: none; cursor: pointer; padding: 0.3rem; display: flex; }
+  .setup-item-remove svg { width: 17px; height: 17px; }
+
+  .add-form { background: var(--card); border: 1px dashed var(--line-strong); border-radius: var(--radius-lg); padding: 0.9rem; margin-bottom: 1rem; }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+
+  .info-banner {
+    display: flex; gap: 0.6rem; align-items: flex-start;
+    background: var(--gold-tint); border: 1px solid var(--gold); border-radius: var(--radius);
+    padding: 0.7rem 0.8rem; margin-bottom: 1.1rem; font-size: 12.5px; color: var(--gold-dark); line-height: 1.5;
+  }
+  .info-banner svg { width: 17px; height: 17px; flex-shrink: 0; margin-top: 1px; }
+
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function() {
+  "use strict";
+
+  // ---------- Icons ----------
+  const ICONS = {
+    logo: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M4 21V9a4 4 0 014-4h8a4 4 0 014 4v12" stroke-linecap="round"/><path d="M4 14h16" stroke-linecap="round"/><path d="M9 5V3M15 5V3" stroke-linecap="round"/></svg>',
+    waiter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="3.2"/><path d="M5.5 21c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" stroke-linecap="round"/></svg>',
+    manager: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l4-6 4 3 4-7 4 5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 20h18" stroke-linecap="round"/></svg>',
+    arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>',
+    cart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="17" cy="20" r="1.4" fill="currentColor" stroke="none"/><path d="M2.5 3h2.4l2.3 12.2a2 2 0 002 1.6h7.9a2 2 0 002-1.6L21 7H6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M9 6V4h6v2M6 6l1 14h10l1-14" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 17l5-5-5-5M15 12H3M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    receipt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z" stroke-linejoin="round"/><path d="M9 8h6M9 12h6" stroke-linecap="round"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.1" stroke-linecap="round"/></svg>',
+    sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4.2"/><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" stroke-linecap="round"/></svg>',
+    box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 8l9-5 9 5-9 5-9-5z" stroke-linejoin="round"/><path d="M3 8v8l9 5 9-5V8M12 13v8" stroke-linejoin="round"/></svg>',
+    users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 2.7-5.4 6-5.4s6 2.4 6 5.4" stroke-linecap="round"/><path d="M16 4.3c1.4.5 2.4 1.9 2.4 3.4 0 1.6-1 2.9-2.4 3.4M18.5 14.7c2 .6 3.5 2.5 3.5 4.8" stroke-linecap="round"/></svg>'
+  };
+  function icon(name) { return ICONS[name] || ""; }
+
+  // ---------- State ----------
+  const todayKey = () => new Date().toISOString().slice(0, 10);
+  const nowTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const fmtMoney = (n) => "KSh " + Math.round(n).toLocaleString();
+
+  let state = {
+    screen: "role",          // role | waiterName | waiter | managerSetup | managerDashboard
+    role: null,
+    waiterName: "",
+    today: todayKey(),
+    standingMenu: [],        // [{id,name,price,category}]
+    todayMenu: [],           // [{id,name,price,category}]
+    stock: {},               // { itemId: startingQty }  (only for items with limited stock)
+    sales: [],               // [{id,itemId,name,qty,price,waiter,table,time}]
+    cart: {},                // { itemId: qty }
+    tableNum: "",
+    sheetOpen: false,
+    toast: null,
+    managerTab: "live",      // live | items | waiters | setup
+    loading: true
+  };
+
+  function toast(msg) {
+    state.toast = msg;
+    render();
+    setTimeout(() => { state.toast = null; render(); }, 2200);
+  }
+
+  // ---------- Storage helpers ----------
+  async function sset(key, value) {
+    try { return await window.storage.set(key, JSON.stringify(value), true); }
+    catch (e) { console.error("storage set failed", key, e); return null; }
+  }
+  async function sget(key) {
+    try {
+      const r = await window.storage.get(key, true);
+      return r ? JSON.parse(r.value) : null;
+    } catch (e) { return null; }
+  }
+
+  async function loadAll() {
+    const [standing, todayMenu, sales, stock] = await Promise.all([
+      sget("menu:standing"),
+      sget("menu:today:" + state.today),
+      sget("sales:" + state.today),
+      sget("stock:" + state.today)
+    ]);
+    state.standingMenu = standing || [];
+    state.todayMenu = todayMenu || [];
+    state.sales = sales || [];
+    state.stock = stock || {};
+    state.loading = false;
+    render();
+  }
+
+  function allActiveItems() {
+    return [...state.standingMenu, ...state.todayMenu];
+  }
+
+  function soldQtyFor(itemId) {
+    return state.sales.filter(s => s.itemId === itemId).reduce((a, s) => a + s.qty, 0);
+  }
+
+  function remainingFor(itemId) {
+    if (!(itemId in state.stock)) return null; // unlimited
+    return state.stock[itemId] - soldQtyFor(itemId);
+  }
+
+  // ---------- Rendering ----------
+  const app = document.getElementById("app");
+
+  function render() {
+    let html = "";
+    if (state.toast) {
+      html += `<div class="toast">${icon("check")}${escapeHtml(state.toast)}</div>`;
+    }
+    switch (state.screen) {
+      case "role": html += renderRole(); break;
+      case "waiterName": html += renderWaiterName(); break;
+      case "waiter": html += renderWaiter(); break;
+      case "managerHome": html += renderManagerHome(); break;
+      default: html += renderRole();
+    }
+    app.innerHTML = html;
+    attachHandlers();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function topbar(title, sub, opts) {
+    opts = opts || {};
+    return `
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">${icon("logo")}</div>
+        <div class="brand-text">
+          <div class="brand-title">${escapeHtml(title)}</div>
+          <div class="brand-sub">${escapeHtml(sub)}</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        ${opts.dateShown ? `<span class="date-pill">${new Date(state.today + "T00:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}</span>` : ""}
+        ${opts.showLogout ? `<button class="icon-btn" data-action="logout" aria-label="Switch role">${icon("logout")}</button>` : ""}
+      </div>
+    </div>`;
+  }
+
+  // ---------- Screen: role picker ----------
+  function renderRole() {
+    return `
+    <div class="role-wrap">
+      <h2 class="sr-only">Order board hotel point of sale. Choose whether you are a waiter or the manager.</h2>
+      <div class="role-mark">${icon("logo")}</div>
+      <h1>Order Board</h1>
+      <p>Ring up orders table-side and keep every waiter's sales in one place.</p>
+
+      <div class="role-card" data-action="pick-waiter">
+        <div class="role-card-icon">${icon("waiter")}</div>
+        <div>
+          <div class="role-card-title">I'm a waiter</div>
+          <div class="role-card-sub">Take orders and log sales as they happen</div>
+        </div>
+        <div class="role-card-arrow">${icon("arrow")}</div>
+      </div>
+
+      <div class="role-card manager" data-action="pick-manager">
+        <div class="role-card-icon">${icon("manager")}</div>
+        <div>
+          <div class="role-card-title">I'm the manager</div>
+          <div class="role-card-sub">Set today's menu and watch sales come in</div>
+        </div>
+        <div class="role-card-arrow">${icon("arrow")}</div>
+      </div>
+    </div>`;
+  }
+
+  // ---------- Screen: waiter name entry ----------
+  function renderWaiterName() {
+    return `
+    <div class="role-wrap">
+      <h2 class="sr-only">Enter your name to start taking orders.</h2>
+      <div class="role-mark">${icon("waiter")}</div>
+      <h1>Your name</h1>
+      <p>This tags every sale you log so the manager knows whose it is.</p>
+      <div class="field name-input-wrap">
+        <input type="text" id="waiterNameInput" placeholder="e.g. Naomi" value="${escapeHtml(state.waiterName)}" autofocus>
+      </div>
+      <button class="btn primary" data-action="confirm-waiter-name" style="margin-top:0.6rem">Start taking orders ${icon("arrow")}</button>
+      <button class="btn ghost" data-action="back-to-role" style="margin-top:0.6rem">${icon("back")} Back</button>
+    </div>`;
+  }
+
+  // ---------- Screen: waiter ordering ----------
+  function renderWaiter() {
+    if (state.loading) return topbar("Order Board", "Loading…");
+
+    const cartCount = Object.values(state.cart).reduce((a, b) => a + b, 0);
+    const cartTotal = Object.entries(state.cart).reduce((sum, [id, qty]) => {
+      const item = allActiveItems().find(i => i.id === id);
+      return sum + (item ? item.price * qty : 0);
+    }, 0);
+
+    const standing = state.standingMenu;
+    const todaySpecials = state.todayMenu;
+
+    let body = "";
+    if (standing.length === 0 && todaySpecials.length === 0) {
+      body += `
+      <div class="empty-state">
+        ${icon("box")}
+        <p>No menu items yet today. Ask the manager to add today's items to get started.</p>
+      </div>`;
+    } else {
+      if (todaySpecials.length > 0) {
+        body += renderCategoryGroup("Today's specials", "today", todaySpecials);
+      }
+      if (standing.length > 0) {
+        body += renderCategoryGroup("Every day menu", "standing", standing);
+      }
+    }
+
+    // recent sales by this waiter
+    const mine = state.sales.filter(s => s.waiter === state.waiterName).slice().reverse().slice(0, 6);
+    let recentHtml = "";
+    if (mine.length > 0) {
+      recentHtml = `
+      <div class="section-head" style="margin-top:1.4rem;">
+        <h2>Your recent sales</h2>
+      </div>`;
+      mine.forEach(s => {
+        recentHtml += `
+        <div class="sale-row">
+          <div class="sale-icon">${s.qty}×</div>
+          <div class="sale-body">
+            <div class="sale-name">${escapeHtml(s.name)}</div>
+            <div class="sale-sub">${s.table ? "Table " + escapeHtml(s.table) + " · " : ""}${s.time}</div>
+          </div>
+          <div class="sale-amt">${fmtMoney(s.price * s.qty)}</div>
+        </div>`;
+      });
+    }
+
+    let html = topbar("Order Board", state.waiterName, { dateShown: true, showLogout: true });
+    html += `<div class="screen tight"><h1 class="page-title">Take an order</h1><p class="page-sub">Tap an item to add it to the ticket, then send it through.</p></div>`;
+    html += `<div class="screen" style="padding-top:0">${body}${recentHtml}</div>`;
+
+    if (cartCount > 0) {
+      html += `
+      <div class="ticket-bar" data-action="open-sheet">
+        <div class="ticket-bar-row">
+          <div>
+            <div class="ticket-info">${cartCount} item${cartCount > 1 ? "s" : ""} on ticket</div>
+            <div class="ticket-total">${fmtMoney(cartTotal)}</div>
+          </div>
+          <button class="btn primary" data-action="open-sheet" data-stop="1">${icon("receipt")} Review</button>
+        </div>
+      </div>`;
+    }
+
+    if (state.sheetOpen) html += renderCartSheet();
+
+    return html;
+  }
+
+  function renderCategoryGroup(title, tagType, items) {
+    let html = `
+    <div class="cat-group">
+      <div class="cat-head">
+        <span class="cat-tag ${tagType}">${tagType === "today" ? "Today only" : "Standing"}</span>
+        <div class="cat-rule"></div>
+      </div>
+      <div class="item-grid">`;
+    items.forEach(item => {
+      const remaining = remainingFor(item.id);
+      const inCart = state.cart[item.id] || 0;
+      const isOut = remaining !== null && remaining <= 0;
+      const isLow = remaining !== null && remaining > 0 && remaining <= 3;
+      html += `
+      <div class="item-tile ${isOut ? "out" : ""} ${isLow ? "low" : ""}" data-action="add-to-cart" data-item="${item.id}">
+        ${inCart > 0 ? `<div class="qty-badge">${inCart}</div>` : ""}
+        <div class="item-name">${escapeHtml(item.name)}</div>
+        <div class="item-meta">
+          <span class="item-price">${fmtMoney(item.price)}</span>
+          ${remaining !== null ? `<span class="item-stock">${isOut ? "Out" : remaining + " left"}</span>` : ""}
+        </div>
+      </div>`;
+    });
+    html += `</div></div>`;
+    return html;
+  }
+
+  function renderCartSheet() {
+    const cartEntries = Object.entries(state.cart).filter(([, qty]) => qty > 0);
+    let total = 0;
+    let lines = "";
+    cartEntries.forEach(([id, qty]) => {
+      const item = allActiveItems().find(i => i.id === id);
+      if (!item) return;
+      total += item.price * qty;
+      lines += `
+      <div class="cart-line">
+        <div style="flex:1">
+          <div class="cart-line-name">${escapeHtml(item.name)}</div>
+          <div class="cart-line-price">${fmtMoney(item.price)} each</div>
+        </div>
+        <div class="stepper">
+          <button data-action="dec-item" data-item="${id}" aria-label="Remove one">−</button>
+          <span>${qty}</span>
+          <button data-action="inc-item" data-item="${id}" aria-label="Add one">+</button>
+        </div>
+      </div>`;
+    });
+
+    if (cartEntries.length === 0) {
+      return `
+      <div class="sheet-overlay" data-action="close-sheet">
+        <div class="sheet" data-stop="1">
+          <div class="sheet-handle"></div>
+          <div class="empty-state"><p>Ticket is empty.</p></div>
+        </div>
+      </div>`;
+    }
+
+    return `
+    <div class="sheet-overlay" data-action="close-sheet">
+      <div class="sheet" data-stop="1">
+        <div class="sheet-handle"></div>
+        <div class="sheet-head"><h2>Review ticket</h2><button class="icon-btn" data-action="close-sheet" aria-label="Close">✕</button></div>
+        ${lines}
+        <div class="field" style="margin-top:0.9rem;">
+          <label class="field-label">Table number (optional)</label>
+          <input type="text" id="tableInput" placeholder="e.g. 12" value="${escapeHtml(state.tableNum)}">
+        </div>
+        <div class="divider"></div>
+        <div class="total-row"><span>Total</span><span>${fmtMoney(total)}</span></div>
+        <button class="btn primary" data-action="submit-sale">${icon("check")} Send to kitchen and log sale</button>
+      </div>
+    </div>`;
+  }
+
+  // ---------- Screen: manager home ----------
+  function renderManagerHome() {
+    if (state.loading) return topbar("Order Board", "Loading…");
+
+    let html = topbar("Order Board", "Manager view", { dateShown: true, showLogout: true });
+    html += `
+    <div class="tabs">
+      <button class="tab ${state.managerTab === "live" ? "active" : ""}" data-action="mtab" data-tab="live">Live sales</button>
+      <button class="tab ${state.managerTab === "items" ? "active" : ""}" data-action="mtab" data-tab="items">Item summary</button>
+      <button class="tab ${state.managerTab === "waiters" ? "active" : ""}" data-action="mtab" data-tab="waiters">By waiter</button>
+      <button class="tab ${state.managerTab === "setup" ? "active" : ""}" data-action="mtab" data-tab="setup">Today's menu</button>
+    </div>`;
+
+    let body = "";
+    if (state.managerTab === "live") body = renderTabLive();
+    else if (state.managerTab === "items") body = renderTabItems();
+    else if (state.managerTab === "waiters") body = renderTabWaiters();
+    else body = renderTabSetup();
+
+    html += `<div class="screen" style="padding-top:0.2rem">${body}</div>`;
+    return html;
+  }
+
+  function renderTabLive() {
+    const totalRevenue = state.sales.reduce((a, s) => a + s.price * s.qty, 0);
+    const totalItems = state.sales.reduce((a, s) => a + s.qty, 0);
+    const waitersActive = new Set(state.sales.map(s => s.waiter)).size;
+
+    let html = `
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Revenue today</div>
+        <div class="stat-value rust">${fmtMoney(totalRevenue)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Items sold</div>
+        <div class="stat-value olive">${totalItems}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Waiters selling</div>
+        <div class="stat-value">${waitersActive}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tickets logged</div>
+        <div class="stat-value">${state.sales.length}</div>
+      </div>
+    </div>`;
+
+    html += `<div class="section-head"><h2>All sales, newest first</h2></div>`;
+    if (state.sales.length === 0) {
+      html += `<div class="empty-state">${icon("receipt")}<p>No sales logged yet today. Once waiters start ringing up orders, they'll show here instantly.</p></div>`;
+    } else {
+      const recent = state.sales.slice().reverse().slice(0, 40);
+      recent.forEach(s => {
+        html += `
+        <div class="sale-row">
+          <div class="sale-icon">${s.qty}×</div>
+          <div class="sale-body">
+            <div class="sale-name">${escapeHtml(s.name)}</div>
+            <div class="sale-sub">${escapeHtml(s.waiter)}${s.table ? " · Table " + escapeHtml(s.table) : ""} · ${s.time}</div>
+          </div>
+          <div class="sale-amt">${fmtMoney(s.price * s.qty)}</div>
+        </div>`;
+      });
+    }
+    return html;
+  }
+
+  function renderTabItems() {
+    const items = allActiveItems();
+    if (items.length === 0) {
+      return `<div class="empty-state">${icon("box")}<p>Add today's menu items in the "Today's menu" tab to start tracking sales per item.</p></div>`;
+    }
+    // sort by qty sold desc
+    const withCounts = items.map(item => ({
+      item, sold: soldQtyFor(item.id), remaining: remainingFor(item.id)
+    })).sort((a, b) => b.sold - a.sold);
+
+    const maxSold = Math.max(1, ...withCounts.map(w => w.sold));
+
+    let html = `<div class="section-head"><h2>Best sellers today</h2></div>`;
+    withCounts.slice(0, 8).filter(w => w.sold > 0).forEach((w, idx) => {
+      html += `
+      <div class="rank-row">
+        <div class="rank-num">${idx + 1}</div>
+        <div class="rank-bar-wrap">
+          <div class="rank-name-row"><span>${escapeHtml(w.item.name)}</span><span class="rank-count">${w.sold} sold</span></div>
+          <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${Math.max(4, (w.sold / maxSold) * 100)}%"></div></div>
+        </div>
+      </div>`;
+    });
+    if (withCounts.every(w => w.sold === 0)) {
+      html += `<div class="empty-state"><p>Nothing sold yet today.</p></div>`;
+    }
+
+    html += `<div class="section-head" style="margin-top:1.2rem"><h2>Stock and remaining</h2></div>`;
+    html += `<div class="info-banner">${icon("info")}Items with a stock count show how many are left, so you know what to top up or push before it runs out. Items without a stock count are treated as always available.</div>`;
+    const stocked = withCounts.filter(w => w.remaining !== null);
+    if (stocked.length === 0) {
+      html += `<div class="empty-state"><p>No items have a starting stock count set. Add stock counts when setting today's menu to track remaining pieces.</p></div>`;
+    } else {
+      stocked.forEach(w => {
+        const cls = w.remaining <= 0 ? "out" : (w.remaining <= 3 ? "low" : "");
+        html += `
+        <div class="stock-row">
+          <div class="stock-name">${escapeHtml(w.item.name)}</div>
+          <div class="stock-nums">${w.sold} sold · <span class="stock-remaining ${cls}">${w.remaining <= 0 ? "out" : w.remaining + " left"}</span></div>
+        </div>`;
+      });
+    }
+    return html;
+  }
+
+  function renderTabWaiters() {
+    const byWaiter = {};
+    state.sales.forEach(s => {
+      if (!byWaiter[s.waiter]) byWaiter[s.waiter] = { revenue: 0, items: 0, tickets: 0 };
+      byWaiter[s.waiter].revenue += s.price * s.qty;
+      byWaiter[s.waiter].items += s.qty;
+      byWaiter[s.waiter].tickets += 1;
+    });
+    const list = Object.entries(byWaiter).sort((a, b) => b[1].revenue - a[1].revenue);
+
+    if (list.length === 0) {
+      return `<div class="empty-state">${icon("users")}<p>No waiter has logged a sale yet today.</p></div>`;
+    }
+
+    const maxRev = Math.max(1, ...list.map(([, v]) => v.revenue));
+    let html = `<div class="section-head"><h2>Sales by waiter</h2></div>`;
+    list.forEach(([name, v], idx) => {
+      html += `
+      <div class="rank-row">
+        <div class="rank-num">${idx + 1}</div>
+        <div class="rank-bar-wrap">
+          <div class="rank-name-row"><span>${escapeHtml(name)}</span><span class="rank-count">${fmtMoney(v.revenue)}</span></div>
+          <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${Math.max(4, (v.revenue / maxRev) * 100)}%"></div></div>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:0.25rem">${v.items} items · ${v.tickets} tickets</div>
+        </div>
+      </div>`;
+    });
+    return html;
+  }
+
+  function renderTabSetup() {
+    let html = `<div class="info-banner">${icon("sun")}Do this each morning before waiters start selling. Standing items only need to be added once — they'll stay in the everyday menu automatically. Today-only specials need to be re-added each day.</div>`;
+
+    html += `<div class="section-head"><h2>Add an item</h2></div>`;
+    html += `
+    <div class="add-form">
+      <div class="field">
+        <label class="field-label">Item name</label>
+        <input type="text" id="newItemName" placeholder="e.g. Grilled tilapia">
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label class="field-label">Price (KSh)</label>
+          <input type="number" id="newItemPrice" placeholder="450" min="0" inputmode="decimal">
+        </div>
+        <div class="field">
+          <label class="field-label">Starting stock</label>
+          <input type="number" id="newItemStock" placeholder="Leave blank if unlimited" min="0" inputmode="numeric">
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:0.6rem">
+        <label class="field-label">Availability</label>
+        <select id="newItemType">
+          <option value="standing">Every day (standing menu)</option>
+          <option value="today">Today only (special)</option>
+        </select>
+      </div>
+      <button class="btn secondary" data-action="add-item">${icon("plus")} Add to today's menu</button>
+    </div>`;
+
+    html += `<div class="section-head"><h2>Today's specials</h2></div>`;
+    if (state.todayMenu.length === 0) {
+      html += `<div class="empty-state" style="padding:1.2rem;"><p>No specials added yet today.</p></div>`;
+    } else {
+      state.todayMenu.forEach(item => {
+        html += `
+        <div class="setup-item-row">
+          <div class="setup-item-name">${escapeHtml(item.name)} · ${fmtMoney(item.price)}</div>
+          ${item.id in state.stock ? `<span class="setup-item-stock-tag">${state.stock[item.id]} stocked</span>` : ""}
+          <button class="setup-item-remove" data-action="remove-today-item" data-item="${item.id}" aria-label="Remove">${icon("trash")}</button>
+        </div>`;
+      });
+    }
+
+    html += `<div class="section-head" style="margin-top:1rem"><h2>Every day menu</h2></div>`;
+    if (state.standingMenu.length === 0) {
+      html += `<div class="empty-state" style="padding:1.2rem;"><p>No standing items yet. Anything added as "Every day" appears here permanently.</p></div>`;
+    } else {
+      state.standingMenu.forEach(item => {
+        html += `
+        <div class="setup-item-row">
+          <div class="setup-item-name">${escapeHtml(item.name)} · ${fmtMoney(item.price)}</div>
+          ${item.id in state.stock ? `<span class="setup-item-stock-tag">${state.stock[item.id]} stocked</span>` : ""}
+          <button class="setup-item-remove" data-action="remove-standing-item" data-item="${item.id}" aria-label="Remove from standing menu">${icon("trash")}</button>
+        </div>`;
+      });
+    }
+    return html;
+  }
+
+  // ---------- Event handling ----------
+  function attachHandlers() {
+    app.querySelectorAll("[data-action]").forEach(el => {
+      el.addEventListener("click", onAction);
+    });
+  }
+
+  function genId() {
+    return "i" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  async function onAction(e) {
+    if (e.currentTarget.dataset.stop) return; // inner button already handled by its own listener, avoid double
+    const action = e.currentTarget.dataset.action;
+
+    if (action === "pick-waiter") {
+      state.role = "waiter";
+      state.screen = state.waiterName ? "waiter" : "waiterName";
+      render();
+    } else if (action === "pick-manager") {
+      state.role = "manager";
+      state.screen = "managerHome";
+      render();
+    } else if (action === "confirm-waiter-name") {
+      const val = document.getElementById("waiterNameInput").value.trim();
+      if (!val) { toast("Enter your name to continue"); return; }
+      state.waiterName = val;
+      state.screen = "waiter";
+      render();
+    } else if (action === "back-to-role") {
+      state.screen = "role";
+      render();
+    } else if (action === "logout") {
+      state.screen = "role";
+      state.cart = {};
+      state.sheetOpen = false;
+      state.waiterName = "";
+      render();
+    } else if (action === "add-to-cart") {
+      const itemId = e.currentTarget.dataset.item;
+      const remaining = remainingFor(itemId);
+      const inCart = state.cart[itemId] || 0;
+      if (remaining !== null && inCart >= remaining) { toast("No more left to sell"); return; }
+      state.cart[itemId] = inCart + 1;
+      render();
+    } else if (action === "open-sheet") {
+      state.sheetOpen = true;
+      render();
+    } else if (action === "close-sheet") {
+      state.sheetOpen = false;
+      render();
+    } else if (action === "inc-item") {
+      const id = e.currentTarget.dataset.item;
+      const remaining = remainingFor(id);
+      const cur = state.cart[id] || 0;
+      if (remaining !== null && cur >= remaining) { toast("No more left to sell"); return; }
+      state.cart[id] = cur + 1;
+      render();
+    } else if (action === "dec-item") {
+      const id = e.currentTarget.dataset.item;
+      const cur = state.cart[id] || 0;
+      state.cart[id] = Math.max(0, cur - 1);
+      if (state.cart[id] === 0) delete state.cart[id];
+      render();
+    } else if (action === "submit-sale") {
+      await submitSale();
+    } else if (action === "mtab") {
+      state.managerTab = e.currentTarget.dataset.tab;
+      render();
+    } else if (action === "add-item") {
+      await addMenuItem();
+    } else if (action === "remove-today-item") {
+      await removeItem("today", e.currentTarget.dataset.item);
+    } else if (action === "remove-standing-item") {
+      await removeItem("standing", e.currentTarget.dataset.item);
+    }
+  }
+
+  async function submitSale() {
+    const tableInput = document.getElementById("tableInput");
+    const table = tableInput ? tableInput.value.trim() : "";
+    const entries = Object.entries(state.cart).filter(([, qty]) => qty > 0);
+    if (entries.length === 0) return;
+
+    const newSales = entries.map(([id, qty]) => {
+      const item = allActiveItems().find(i => i.id === id);
+      return {
+        id: genId(),
+        itemId: id,
+        name: item.name,
+        qty,
+        price: item.price,
+        waiter: state.waiterName,
+        table,
+        time: nowTime()
+      };
+    });
+
+    state.sales = [...state.sales, ...newSales];
+    await sset("sales:" + state.today, state.sales);
+
+    state.cart = {};
+    state.tableNum = "";
+    state.sheetOpen = false;
+    render();
+    toast("Sale logged");
+  }
+
+  async function addMenuItem() {
+    const name = document.getElementById("newItemName").value.trim();
+    const priceRaw = document.getElementById("newItemPrice").value;
+    const stockRaw = document.getElementById("newItemStock").value;
+    const type = document.getElementById("newItemType").value;
+
+    if (!name) { toast("Enter an item name"); return; }
+    const price = parseFloat(priceRaw);
+    if (!priceRaw || isNaN(price) || price < 0) { toast("Enter a valid price"); return; }
+
+    const id = genId();
+    const newItem = { id, name, price, category: type };
+
+    if (type === "standing") {
+      state.standingMenu = [...state.standingMenu, newItem];
+      await sset("menu:standing", state.standingMenu);
+    } else {
+      state.todayMenu = [...state.todayMenu, newItem];
+      await sset("menu:today:" + state.today, state.todayMenu);
+    }
+
+    if (stockRaw && !isNaN(parseInt(stockRaw)) && parseInt(stockRaw) >= 0) {
+      state.stock[id] = parseInt(stockRaw);
+      await sset("stock:" + state.today, state.stock);
+    }
+
+    render();
+    toast(name + " added");
+  }
+
+  async function removeItem(which, itemId) {
+    if (which === "today") {
+      state.todayMenu = state.todayMenu.filter(i => i.id !== itemId);
+      await sset("menu:today:" + state.today, state.todayMenu);
+    } else {
+      state.standingMenu = state.standingMenu.filter(i => i.id !== itemId);
+      await sset("menu:standing", state.standingMenu);
+    }
+    if (itemId in state.stock) {
+      delete state.stock[itemId];
+      await sset("stock:" + state.today, state.stock);
+    }
+    render();
+  }
+
+  // ---------- Init ----------
+  render(); // show loading shell immediately
+  loadAll();
+})();
+</script>
+</body>
+</html>
