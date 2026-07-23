@@ -313,9 +313,16 @@
 <body>
 <div id="app"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 (function() {
   "use strict";
+
+  // ---------- Supabase ----------
+  const SUPABASE_URL = "https://ufmmsigxdruxupkftgwi.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_Jg-vTiB8wknl5t1T49HPhg_szUm1qy5";
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const HOTEL_NAME = "ROSE CAFE";
 
   // ---------- Icons ----------
   const ICONS = {
@@ -342,20 +349,34 @@
   const nowTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const fmtMoney = (n) => "KSh " + Math.round(n).toLocaleString();
 
+  // Mon/Wed/Fri share a menu, Tue/Thu/Sat share a menu, Sunday is its own.
+  const DAY_GROUP_LABEL = { mwf: "Mon / Wed / Fri", tts: "Tue / Thu / Sat", sun: "Sunday" };
+  function dayGroupFor(date) {
+    const d = date.getDay(); // 0=Sun,1=Mon,...6=Sat
+    if (d === 0) return "sun";
+    if (d === 1 || d === 3 || d === 5) return "mwf";
+    return "tts"; // 2,4,6 = Tue, Thu, Sat
+  }
+
   let state = {
-    screen: "role",          // role | waiterName | waiter | managerSetup | managerDashboard
+    screen: "role",          // role | waiterName | waiter | managerHome
     role: null,
     waiterName: "",
     today: todayKey(),
-    standingMenu: [],        // [{id,name,price,category}]
-    todayMenu: [],           // [{id,name,price,category}]
-    stock: {},               // { itemId: startingQty }  (only for items with limited stock)
+    dayGroup: dayGroupFor(new Date()),
+    foodMenu: [],            // [{id,name,price,section:'food',day_group}] — today's day-group only
+    drinksMenu: [],          // [{id,name,price,section:'drinks'}] — always active
+    snacksMenu: [],          // [{id,name,price,section:'snacks'}] — always active
+    stock: {},               // { itemId: startingQty }  (only for items with limited stock today)
     sales: [],               // [{id,itemId,name,qty,price,waiter,table,time}]
     cart: {},                // { itemId: qty }
     tableNum: "",
     sheetOpen: false,
     toast: null,
     managerTab: "live",      // live | items | waiters | setup
+    setupSection: "food",    // food | drinks | snacks  (which section manager is editing)
+    setupDayGroup: dayGroupFor(new Date()), // which food day-group manager is editing
+    setupItems: [],          // items currently shown in the manager setup list
     loading: true
   };
 
@@ -365,35 +386,68 @@
     setTimeout(() => { state.toast = null; render(); }, 2200);
   }
 
-  // ---------- Storage helpers ----------
-  async function sset(key, value) {
-    try { return await window.storage.set(key, JSON.stringify(value), true); }
-    catch (e) { console.error("storage set failed", key, e); return null; }
+  // ---------- Supabase data access ----------
+  function logErr(label, error) { if (error) console.error(label, error); }
+
+  async function fetchMenu() {
+    const [foodRes, drinksRes, snacksRes] = await Promise.all([
+      sb.from("menu_items").select("*").eq("section", "food").eq("day_group", state.dayGroup).eq("active", true).order("created_at"),
+      sb.from("menu_items").select("*").eq("section", "drinks").eq("active", true).order("created_at"),
+      sb.from("menu_items").select("*").eq("section", "snacks").eq("active", true).order("created_at")
+    ]);
+    logErr("fetch food menu", foodRes.error);
+    logErr("fetch drinks menu", drinksRes.error);
+    logErr("fetch snacks menu", snacksRes.error);
+    state.foodMenu = foodRes.data || [];
+    state.drinksMenu = drinksRes.data || [];
+    state.snacksMenu = snacksRes.data || [];
   }
-  async function sget(key) {
-    try {
-      const r = await window.storage.get(key, true);
-      return r ? JSON.parse(r.value) : null;
-    } catch (e) { return null; }
+
+  async function fetchStock() {
+    const { data, error } = await sb.from("stock").select("item_id, starting_qty").eq("date", state.today);
+    logErr("fetch stock", error);
+    const map = {};
+    (data || []).forEach(row => { map[row.item_id] = row.starting_qty; });
+    state.stock = map;
+  }
+
+  async function fetchSales() {
+    const start = state.today + "T00:00:00";
+    const end = state.today + "T23:59:59";
+    const { data, error } = await sb.from("sales").select("*")
+      .gte("created_at", start).lte("created_at", end)
+      .order("created_at", { ascending: true });
+    logErr("fetch sales", error);
+    state.sales = (data || []).map(row => ({
+      id: row.id, itemId: row.item_id, name: row.item_name, qty: row.qty,
+      price: row.price, waiter: row.waiter_name, table: row.table_num,
+      time: new Date(row.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    }));
   }
 
   async function loadAll() {
-    const [standing, todayMenu, sales, stock] = await Promise.all([
-      sget("menu:standing"),
-      sget("menu:today:" + state.today),
-      sget("sales:" + state.today),
-      sget("stock:" + state.today)
-    ]);
-    state.standingMenu = standing || [];
-    state.todayMenu = todayMenu || [];
-    state.sales = sales || [];
-    state.stock = stock || {};
+    await Promise.all([fetchMenu(), fetchStock(), fetchSales()]);
     state.loading = false;
     render();
   }
 
+  async function fetchMenuForSetup() {
+    // Loads whichever section/day-group the manager is currently editing
+    if (state.setupSection === "food") {
+      const { data, error } = await sb.from("menu_items").select("*")
+        .eq("section", "food").eq("day_group", state.setupDayGroup).eq("active", true).order("created_at");
+      logErr("fetch setup food", error);
+      state.setupItems = data || [];
+    } else {
+      const { data, error } = await sb.from("menu_items").select("*")
+        .eq("section", state.setupSection).eq("active", true).order("created_at");
+      logErr("fetch setup " + state.setupSection, error);
+      state.setupItems = data || [];
+    }
+  }
+
   function allActiveItems() {
-    return [...state.standingMenu, ...state.todayMenu];
+    return [...state.foodMenu, ...state.drinksMenu, ...state.snacksMenu];
   }
 
   function soldQtyFor(itemId) {
@@ -435,8 +489,8 @@
       <div class="brand">
         <div class="brand-mark">${icon("logo")}</div>
         <div class="brand-text">
-          <div class="brand-title">${escapeHtml(title)}</div>
-          <div class="brand-sub">${escapeHtml(sub)}</div>
+          <div class="brand-title">${escapeHtml(HOTEL_NAME)}</div>
+          <div class="brand-sub">${escapeHtml(title)}${sub ? " · " + escapeHtml(sub) : ""}</div>
         </div>
       </div>
       <div class="topbar-right">
@@ -452,6 +506,7 @@
     <div class="role-wrap">
       <h2 class="sr-only">Order board hotel point of sale. Choose whether you are a waiter or the manager.</h2>
       <div class="role-mark">${icon("logo")}</div>
+      <div style="font-size:12.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-soft);font-weight:700;margin-bottom:0.2rem;">${escapeHtml(HOTEL_NAME)}</div>
       <h1>Order Board</h1>
       <p>Ring up orders table-side and keep every waiter's sales in one place.</p>
 
@@ -501,22 +556,26 @@
       return sum + (item ? item.price * qty : 0);
     }, 0);
 
-    const standing = state.standingMenu;
-    const todaySpecials = state.todayMenu;
+    const food = state.foodMenu;
+    const drinks = state.drinksMenu;
+    const snacks = state.snacksMenu;
 
     let body = "";
-    if (standing.length === 0 && todaySpecials.length === 0) {
+    if (food.length === 0 && drinks.length === 0 && snacks.length === 0) {
       body += `
       <div class="empty-state">
         ${icon("box")}
-        <p>No menu items yet today. Ask the manager to add today's items to get started.</p>
+        <p>No menu items yet. Ask the manager to set up the menu to get started.</p>
       </div>`;
     } else {
-      if (todaySpecials.length > 0) {
-        body += renderCategoryGroup("Today's specials", "today", todaySpecials);
+      if (food.length > 0) {
+        body += renderCategoryGroup("Food · " + DAY_GROUP_LABEL[state.dayGroup], "today", food);
       }
-      if (standing.length > 0) {
-        body += renderCategoryGroup("Every day menu", "standing", standing);
+      if (drinks.length > 0) {
+        body += renderCategoryGroup("Drinks", "standing", drinks);
+      }
+      if (snacks.length > 0) {
+        body += renderCategoryGroup("Snacks", "standing", snacks);
       }
     }
 
@@ -649,7 +708,7 @@
       <button class="tab ${state.managerTab === "live" ? "active" : ""}" data-action="mtab" data-tab="live">Live sales</button>
       <button class="tab ${state.managerTab === "items" ? "active" : ""}" data-action="mtab" data-tab="items">Item summary</button>
       <button class="tab ${state.managerTab === "waiters" ? "active" : ""}" data-action="mtab" data-tab="waiters">By waiter</button>
-      <button class="tab ${state.managerTab === "setup" ? "active" : ""}" data-action="mtab" data-tab="setup">Today's menu</button>
+      <button class="tab ${state.managerTab === "setup" ? "active" : ""}" data-action="mtab" data-tab="setup">Menu setup</button>
     </div>`;
 
     let body = "";
@@ -710,7 +769,7 @@
   function renderTabItems() {
     const items = allActiveItems();
     if (items.length === 0) {
-      return `<div class="empty-state">${icon("box")}<p>Add today's menu items in the "Today's menu" tab to start tracking sales per item.</p></div>`;
+      return `<div class="empty-state">${icon("box")}<p>Add menu items in the "Menu setup" tab to start tracking sales per item.</p></div>`;
     }
     // sort by qty sold desc
     const withCounts = items.map(item => ({
@@ -783,7 +842,26 @@
   }
 
   function renderTabSetup() {
-    let html = `<div class="info-banner">${icon("sun")}Do this each morning before waiters start selling. Standing items only need to be added once — they'll stay in the everyday menu automatically. Today-only specials need to be re-added each day.</div>`;
+    let html = `<div class="info-banner">${icon("sun")}Drinks and snacks stay the same every day — set them up once. Food rotates: build the Mon/Wed/Fri menu, the Tue/Thu/Sat menu, and the Sunday menu separately, and the app switches automatically based on today's date.</div>`;
+
+    // Section sub-tabs (food / drinks / snacks)
+    html += `<div class="tabs" style="padding:0 0 0.7rem;">
+      <button class="tab ${state.setupSection === "food" ? "active" : ""}" data-action="setup-section" data-section="food">Food</button>
+      <button class="tab ${state.setupSection === "drinks" ? "active" : ""}" data-action="setup-section" data-section="drinks">Drinks</button>
+      <button class="tab ${state.setupSection === "snacks" ? "active" : ""}" data-action="setup-section" data-section="snacks">Snacks</button>
+    </div>`;
+
+    // Day-group sub-tabs (only for food)
+    if (state.setupSection === "food") {
+      html += `<div class="tabs" style="padding:0 0 0.9rem;">`;
+      ["mwf", "tts", "sun"].forEach(g => {
+        const isToday = g === state.dayGroup;
+        html += `<button class="tab ${state.setupDayGroup === g ? "active" : ""}" data-action="setup-daygroup" data-daygroup="${g}">${DAY_GROUP_LABEL[g]}${isToday ? " · Today" : ""}</button>`;
+      });
+      html += `</div>`;
+    }
+
+    const editingToday = state.setupSection !== "food" || state.setupDayGroup === state.dayGroup;
 
     html += `<div class="section-head"><h2>Add an item</h2></div>`;
     html += `
@@ -799,43 +877,24 @@
         </div>
         <div class="field">
           <label class="field-label">Starting stock</label>
-          <input type="number" id="newItemStock" placeholder="Leave blank if unlimited" min="0" inputmode="numeric">
+          <input type="number" id="newItemStock" placeholder="Leave blank if unlimited" min="0" inputmode="numeric" ${editingToday ? "" : "disabled"}>
         </div>
       </div>
-      <div class="field" style="margin-bottom:0.6rem">
-        <label class="field-label">Availability</label>
-        <select id="newItemType">
-          <option value="standing">Every day (standing menu)</option>
-          <option value="today">Today only (special)</option>
-        </select>
-      </div>
-      <button class="btn secondary" data-action="add-item">${icon("plus")} Add to today's menu</button>
+      ${editingToday ? "" : `<p style="font-size:11.5px;color:var(--ink-soft);margin:-0.3rem 0 0.7rem;">Stock counts only apply to today — come back on that day to set stock for this menu.</p>`}
+      <button class="btn secondary" data-action="add-item">${icon("plus")} Add item</button>
     </div>`;
 
-    html += `<div class="section-head"><h2>Today's specials</h2></div>`;
-    if (state.todayMenu.length === 0) {
-      html += `<div class="empty-state" style="padding:1.2rem;"><p>No specials added yet today.</p></div>`;
+    const sectionLabel = state.setupSection === "food" ? DAY_GROUP_LABEL[state.setupDayGroup] + " menu" : (state.setupSection === "drinks" ? "Drinks menu" : "Snacks menu");
+    html += `<div class="section-head"><h2>${sectionLabel}</h2></div>`;
+    if (state.setupItems.length === 0) {
+      html += `<div class="empty-state" style="padding:1.2rem;"><p>No items here yet.</p></div>`;
     } else {
-      state.todayMenu.forEach(item => {
+      state.setupItems.forEach(item => {
         html += `
         <div class="setup-item-row">
           <div class="setup-item-name">${escapeHtml(item.name)} · ${fmtMoney(item.price)}</div>
           ${item.id in state.stock ? `<span class="setup-item-stock-tag">${state.stock[item.id]} stocked</span>` : ""}
-          <button class="setup-item-remove" data-action="remove-today-item" data-item="${item.id}" aria-label="Remove">${icon("trash")}</button>
-        </div>`;
-      });
-    }
-
-    html += `<div class="section-head" style="margin-top:1rem"><h2>Every day menu</h2></div>`;
-    if (state.standingMenu.length === 0) {
-      html += `<div class="empty-state" style="padding:1.2rem;"><p>No standing items yet. Anything added as "Every day" appears here permanently.</p></div>`;
-    } else {
-      state.standingMenu.forEach(item => {
-        html += `
-        <div class="setup-item-row">
-          <div class="setup-item-name">${escapeHtml(item.name)} · ${fmtMoney(item.price)}</div>
-          ${item.id in state.stock ? `<span class="setup-item-stock-tag">${state.stock[item.id]} stocked</span>` : ""}
-          <button class="setup-item-remove" data-action="remove-standing-item" data-item="${item.id}" aria-label="Remove from standing menu">${icon("trash")}</button>
+          <button class="setup-item-remove" data-action="remove-setup-item" data-item="${item.id}" aria-label="Remove">${icon("trash")}</button>
         </div>`;
       });
     }
@@ -910,13 +969,22 @@
       await submitSale();
     } else if (action === "mtab") {
       state.managerTab = e.currentTarget.dataset.tab;
+      if (state.managerTab === "setup" && state.setupItems.length === 0) {
+        await fetchMenuForSetup();
+      }
       render();
     } else if (action === "add-item") {
       await addMenuItem();
-    } else if (action === "remove-today-item") {
-      await removeItem("today", e.currentTarget.dataset.item);
-    } else if (action === "remove-standing-item") {
-      await removeItem("standing", e.currentTarget.dataset.item);
+    } else if (action === "remove-setup-item") {
+      await removeItem(e.currentTarget.dataset.item);
+    } else if (action === "setup-section") {
+      state.setupSection = e.currentTarget.dataset.section;
+      await fetchMenuForSetup();
+      render();
+    } else if (action === "setup-daygroup") {
+      state.setupDayGroup = e.currentTarget.dataset.daygroup;
+      await fetchMenuForSetup();
+      render();
     }
   }
 
@@ -926,22 +994,30 @@
     const entries = Object.entries(state.cart).filter(([, qty]) => qty > 0);
     if (entries.length === 0) return;
 
-    const newSales = entries.map(([id, qty]) => {
+    const rows = entries.map(([id, qty]) => {
       const item = allActiveItems().find(i => i.id === id);
       return {
-        id: genId(),
-        itemId: id,
-        name: item.name,
+        item_id: id,
+        item_name: item.name,
         qty,
         price: item.price,
-        waiter: state.waiterName,
-        table,
-        time: nowTime()
+        waiter_name: state.waiterName,
+        table_num: table || null
       };
     });
 
+    const { data, error } = await sb.from("sales").insert(rows).select();
+    if (error) { logErr("insert sales", error); toast("Couldn't save sale — try again"); return; }
+
+    // Keep a record of waiter names used (upsert, ignore if it already exists)
+    await sb.from("waiters").upsert({ name: state.waiterName }, { onConflict: "name" });
+
+    const newSales = (data || []).map(row => ({
+      id: row.id, itemId: row.item_id, name: row.item_name, qty: row.qty,
+      price: row.price, waiter: row.waiter_name, table: row.table_num,
+      time: new Date(row.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    }));
     state.sales = [...state.sales, ...newSales];
-    await sset("sales:" + state.today, state.sales);
 
     state.cart = {};
     state.tableNum = "";
@@ -954,43 +1030,50 @@
     const name = document.getElementById("newItemName").value.trim();
     const priceRaw = document.getElementById("newItemPrice").value;
     const stockRaw = document.getElementById("newItemStock").value;
-    const type = document.getElementById("newItemType").value;
 
     if (!name) { toast("Enter an item name"); return; }
     const price = parseFloat(priceRaw);
     if (!priceRaw || isNaN(price) || price < 0) { toast("Enter a valid price"); return; }
 
-    const id = genId();
-    const newItem = { id, name, price, category: type };
+    const row = {
+      name, price,
+      section: state.setupSection,
+      day_group: state.setupSection === "food" ? state.setupDayGroup : null
+    };
 
-    if (type === "standing") {
-      state.standingMenu = [...state.standingMenu, newItem];
-      await sset("menu:standing", state.standingMenu);
-    } else {
-      state.todayMenu = [...state.todayMenu, newItem];
-      await sset("menu:today:" + state.today, state.todayMenu);
+    const { data, error } = await sb.from("menu_items").insert(row).select().single();
+    if (error) { logErr("insert menu item", error); toast("Couldn't add item — try again"); return; }
+
+    state.setupItems = [...state.setupItems, data];
+    // Also refresh the waiter-facing menu if this item lands in today's view
+    if (state.setupSection !== "food" || state.setupDayGroup === state.dayGroup) {
+      await fetchMenu();
     }
 
-    if (stockRaw && !isNaN(parseInt(stockRaw)) && parseInt(stockRaw) >= 0) {
-      state.stock[id] = parseInt(stockRaw);
-      await sset("stock:" + state.today, state.stock);
+    const editingToday = state.setupSection !== "food" || state.setupDayGroup === state.dayGroup;
+    if (editingToday && stockRaw && !isNaN(parseInt(stockRaw)) && parseInt(stockRaw) >= 0) {
+      const qty = parseInt(stockRaw);
+      const { error: stockErr } = await sb.from("stock").upsert(
+        { item_id: data.id, date: state.today, starting_qty: qty }, { onConflict: "item_id,date" }
+      );
+      logErr("insert stock", stockErr);
+      if (!stockErr) state.stock[data.id] = qty;
     }
 
     render();
     toast(name + " added");
   }
 
-  async function removeItem(which, itemId) {
-    if (which === "today") {
-      state.todayMenu = state.todayMenu.filter(i => i.id !== itemId);
-      await sset("menu:today:" + state.today, state.todayMenu);
-    } else {
-      state.standingMenu = state.standingMenu.filter(i => i.id !== itemId);
-      await sset("menu:standing", state.standingMenu);
-    }
+  async function removeItem(itemId) {
+    const { error } = await sb.from("menu_items").update({ active: false }).eq("id", itemId);
+    if (error) { logErr("remove menu item", error); toast("Couldn't remove item — try again"); return; }
+
+    state.setupItems = state.setupItems.filter(i => i.id !== itemId);
+    await fetchMenu(); // refresh waiter-facing menu in case it changed
+
     if (itemId in state.stock) {
       delete state.stock[itemId];
-      await sset("stock:" + state.today, state.stock);
+      await sb.from("stock").delete().eq("item_id", itemId).eq("date", state.today);
     }
     render();
   }
