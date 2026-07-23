@@ -1,6 +1,6 @@
 const CACHE_NAME = "rose-cafe-pos-v1";
 const APP_SHELL = [
-  "./hotel-pos.html",
+  "./index.html",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
