@@ -2,7 +2,7 @@
   "name": "Rose Cafe - Order Board",
   "short_name": "Rose Cafe",
   "description": "Take orders and log sales at Rose Cafe",
-  "start_url": "./hotel-pos.html?src=pwa",
+  "start_url": "./index.html?src=pwa",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
