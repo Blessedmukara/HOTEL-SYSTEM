@@ -3,7 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Order Board — Hotel POS</title>
+<title>Order Board — Rose Cafe</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#b5502e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rose Cafe">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
 <style>
   :root {
     --ink: #2b2420;
@@ -327,6 +335,14 @@
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   const HOTEL_NAME = "ROSE CAFE";
 
+  // Launched as an installed app (PWA) or via its start_url? Skip the role picker
+  // and drop waiters straight into name entry — managers still get the full picker
+  // when opening this in a regular browser tab/link.
+  const IS_PWA_LAUNCH =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true ||
+    new URLSearchParams(location.search).get("src") === "pwa";
+
   // ---------- Icons ----------
   const ICONS = {
     logo: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M4 21V9a4 4 0 014-4h8a4 4 0 014 4v12" stroke-linecap="round"/><path d="M4 14h16" stroke-linecap="round"/><path d="M9 5V3M15 5V3" stroke-linecap="round"/></svg>',
@@ -362,8 +378,8 @@
   }
 
   let state = {
-    screen: "role",          // role | waiterName | waiter | managerHome
-    role: null,
+    screen: IS_PWA_LAUNCH ? "waiterName" : "role",          // role | waiterName | waiter | managerHome
+    role: IS_PWA_LAUNCH ? "waiter" : null,
     waiterName: "",
     today: todayKey(),
     dayGroup: dayGroupFor(new Date()),
@@ -545,7 +561,7 @@
         <input type="text" id="waiterNameInput" placeholder="e.g. Naomi" value="${escapeHtml(state.waiterName)}" autofocus>
       </div>
       <button class="btn primary" data-action="confirm-waiter-name" style="margin-top:0.6rem">Start taking orders ${icon("arrow")}</button>
-      <button class="btn ghost" data-action="back-to-role" style="margin-top:0.6rem">${icon("back")} Back</button>
+      <button class="btn ghost" data-action="back-to-role" style="margin-top:0.6rem">${IS_PWA_LAUNCH ? "Manager login" : icon("back") + " Back"}</button>
     </div>`;
   }
 
@@ -1084,6 +1100,12 @@
   // ---------- Init ----------
   render(); // show loading shell immediately
   loadAll();
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(err => console.error("SW registration failed", err));
+    });
+  }
 })();
 </script>
 </body>
