@@ -287,7 +287,7 @@
   .rank-count { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
 
   .stock-row {
-    display: flex; align-items: center; gap: 0.7rem;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.7rem;
     padding: 0.65rem 0; border-bottom: 1px solid var(--line);
   }
   .stock-row:last-child { border-bottom: none; }
@@ -296,6 +296,9 @@
   .stock-remaining { font-weight: 700; }
   .stock-remaining.low { color: var(--gold-dark); }
   .stock-remaining.out { color: var(--rust-dark); }
+  .restock-form { display: flex; gap: 0.4rem; width: 100%; }
+  .restock-input { flex: 1; padding: 0.5rem 0.65rem; font-size: 13px; }
+  button.btn.small { width: auto; padding: 0.5rem 0.9rem; font-size: 13px; flex-shrink: 0; }
 
   /* Manager: menu setup */
   .setup-item-row {
@@ -396,6 +399,7 @@
     setupSection: "food",    // food | drinks | snacks  (which section manager is editing)
     setupDayGroup: dayGroupFor(new Date()), // which food day-group manager is editing
     setupItems: [],          // items currently shown in the manager setup list
+    waiters: [],             // [{id, name}] roster of waiter names ever used
     loading: true
   };
 
@@ -444,8 +448,14 @@
     }));
   }
 
+  async function fetchWaiters() {
+    const { data, error } = await sb.from("waiters").select("*").order("name");
+    logErr("fetch waiters", error);
+    state.waiters = data || [];
+  }
+
   async function loadAll() {
-    await Promise.all([fetchMenu(), fetchStock(), fetchSales()]);
+    await Promise.all([fetchMenu(), fetchStock(), fetchSales(), fetchWaiters()]);
     state.loading = false;
     render();
   }
@@ -813,20 +823,20 @@
     }
 
     html += `<div class="section-head" style="margin-top:1.2rem"><h2>Stock and remaining</h2></div>`;
-    html += `<div class="info-banner">${icon("info")}Items with a stock count show how many are left, so you know what to top up or push before it runs out. Items without a stock count are treated as always available.</div>`;
-    const stocked = withCounts.filter(w => w.remaining !== null);
-    if (stocked.length === 0) {
-      html += `<div class="empty-state"><p>No items have a starting stock count set. Add stock counts when setting today's menu to track remaining pieces.</p></div>`;
-    } else {
-      stocked.forEach(w => {
-        const cls = w.remaining <= 0 ? "out" : (w.remaining <= 3 ? "low" : "");
-        html += `
-        <div class="stock-row">
-          <div class="stock-name">${escapeHtml(w.item.name)}</div>
-          <div class="stock-nums">${w.sold} sold · <span class="stock-remaining ${cls}">${w.remaining <= 0 ? "out" : w.remaining + " left"}</span></div>
-        </div>`;
-      });
-    }
+    html += `<div class="info-banner">${icon("info")}Set a stock count any time — when a fresh delivery comes in mid-shift, enter the new total here and it updates instantly. Leave an item's stock blank to treat it as always available.</div>`;
+    withCounts.forEach(w => {
+      const cls = w.remaining === null ? "" : (w.remaining <= 0 ? "out" : (w.remaining <= 3 ? "low" : ""));
+      const remainingLabel = w.remaining === null ? "no cap set" : (w.remaining <= 0 ? "out" : w.remaining + " left");
+      html += `
+      <div class="stock-row">
+        <div class="stock-name">${escapeHtml(w.item.name)}</div>
+        <div class="stock-nums">${w.sold} sold · <span class="stock-remaining ${cls}">${remainingLabel}</span></div>
+        <div class="restock-form">
+          <input type="number" class="restock-input" id="restock-${w.item.id}" placeholder="New stock qty" min="0" inputmode="numeric">
+          <button class="btn secondary small" data-action="restock-item" data-item="${w.item.id}">Restock</button>
+        </div>
+      </div>`;
+    });
     return html;
   }
 
@@ -840,23 +850,38 @@
     });
     const list = Object.entries(byWaiter).sort((a, b) => b[1].revenue - a[1].revenue);
 
+    let html = "";
     if (list.length === 0) {
-      return `<div class="empty-state">${icon("users")}<p>No waiter has logged a sale yet today.</p></div>`;
+      html += `<div class="empty-state">${icon("users")}<p>No waiter has logged a sale yet today.</p></div>`;
+    } else {
+      const maxRev = Math.max(1, ...list.map(([, v]) => v.revenue));
+      html += `<div class="section-head"><h2>Sales by waiter — today</h2></div>`;
+      list.forEach(([name, v], idx) => {
+        html += `
+        <div class="rank-row">
+          <div class="rank-num">${idx + 1}</div>
+          <div class="rank-bar-wrap">
+            <div class="rank-name-row"><span>${escapeHtml(name)}</span><span class="rank-count">${fmtMoney(v.revenue)}</span></div>
+            <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${Math.max(4, (v.revenue / maxRev) * 100)}%"></div></div>
+            <div style="font-size:11.5px;color:var(--ink-soft);margin-top:0.25rem">${v.items} items · ${v.tickets} tickets</div>
+          </div>
+        </div>`;
+      });
     }
 
-    const maxRev = Math.max(1, ...list.map(([, v]) => v.revenue));
-    let html = `<div class="section-head"><h2>Sales by waiter</h2></div>`;
-    list.forEach(([name, v], idx) => {
-      html += `
-      <div class="rank-row">
-        <div class="rank-num">${idx + 1}</div>
-        <div class="rank-bar-wrap">
-          <div class="rank-name-row"><span>${escapeHtml(name)}</span><span class="rank-count">${fmtMoney(v.revenue)}</span></div>
-          <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${Math.max(4, (v.revenue / maxRev) * 100)}%"></div></div>
-          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:0.25rem">${v.items} items · ${v.tickets} tickets</div>
-        </div>
-      </div>`;
-    });
+    html += `<div class="section-head" style="margin-top:1.2rem"><h2>Waiter roster</h2></div>`;
+    html += `<div class="info-banner">${icon("info")}Remove a waiter here once they've left or transferred out. This just clears them from the roster list — it doesn't touch their past sales history.</div>`;
+    if (state.waiters.length === 0) {
+      html += `<div class="empty-state" style="padding:1.2rem;"><p>No waiters logged yet. Names appear here automatically the first time someone logs a sale.</p></div>`;
+    } else {
+      state.waiters.forEach(w => {
+        html += `
+        <div class="setup-item-row">
+          <div class="setup-item-name">${escapeHtml(w.name)}</div>
+          <button class="setup-item-remove" data-action="remove-waiter" data-id="${w.id}" data-name="${escapeHtml(w.name)}" aria-label="Remove ${escapeHtml(w.name)} from roster">${icon("trash")}</button>
+        </div>`;
+      });
+    }
     return html;
   }
 
@@ -1004,6 +1029,10 @@
       state.setupDayGroup = e.currentTarget.dataset.daygroup;
       await fetchMenuForSetup();
       render();
+    } else if (action === "restock-item") {
+      await restockItem(e.currentTarget.dataset.item);
+    } else if (action === "remove-waiter") {
+      await removeWaiter(e.currentTarget.dataset.id, e.currentTarget.dataset.name);
     }
   }
 
@@ -1097,6 +1126,30 @@
     render();
   }
 
+  async function restockItem(itemId) {
+    const input = document.getElementById("restock-" + itemId);
+    const qtyRaw = input ? input.value : "";
+    const qty = parseInt(qtyRaw);
+    if (!qtyRaw || isNaN(qty) || qty < 0) { toast("Enter a valid stock number"); return; }
+
+    const { error } = await sb.from("stock").upsert(
+      { item_id: itemId, date: state.today, starting_qty: qty }, { onConflict: "item_id,date" }
+    );
+    if (error) { logErr("restock item", error); toast("Couldn't update stock — try again"); return; }
+
+    state.stock[itemId] = qty;
+    render();
+    toast("Stock updated");
+  }
+
+  async function removeWaiter(waiterId, waiterName) {
+    const { error } = await sb.from("waiters").delete().eq("id", waiterId);
+    if (error) { logErr("remove waiter", error); toast("Couldn't remove waiter — try again"); return; }
+    state.waiters = state.waiters.filter(w => w.id !== waiterId);
+    render();
+    toast(waiterName + " removed from roster");
+  }
+
   // ---------- Init ----------
   render(); // show loading shell immediately
   loadAll();
@@ -1106,6 +1159,21 @@
       navigator.serviceWorker.register("sw.js").catch(err => console.error("SW registration failed", err));
     });
   }
+
+  // Check every minute for a date rollover. As soon as the clock passes midnight,
+  // switch to the new day's food menu (if the day-group changed) and reload sales/stock,
+  // which are already scoped to "today" — so the dashboard naturally starts fresh.
+  setInterval(async () => {
+    const t = todayKey();
+    if (t !== state.today) {
+      state.today = t;
+      state.dayGroup = dayGroupFor(new Date());
+      state.setupDayGroup = state.dayGroup;
+      state.cart = {};
+      await loadAll();
+      toast("New day started — dashboard reset");
+    }
+  }, 60 * 1000);
 })();
 </script>
 </body>
